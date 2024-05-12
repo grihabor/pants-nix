@@ -8,6 +8,6 @@
 }:
 pkgs.mkShell {
   nativeBuildInputs = let
-    pantspkgs = pkgs.callPackage ./. {};
-  in [pantspkgs.pants-bin."release_2.20.1"];
+    pants-bin = pkgs.callPackage ./. {};
+  in [pants-bin."release_2.20.1"];
 }
