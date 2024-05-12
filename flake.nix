@@ -21,5 +21,8 @@
     packages.${system} = with pants-bin; {
       inherit "release_2.20.0" "release_2.20.1";
     };
+    devShells.${system}.default = pkgs.mkShell {
+      packages = [pants-bin."release_2.20.0"];
+    };
   };
 }
