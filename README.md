@@ -2,6 +2,19 @@
 
 Nix packages for [pants build system](https://www.pantsbuild.org/).
 
+## Nuances
+
+Official [pants launcher](https://github.com/pantsbuild/scie-pants) can read
+`[GLOBAL].pants_version` from `pants.toml`, download the correct version of
+pants and run it. On the contrary, this nix package only provides the specific
+versions of pants, you need to use the correct version yourself.
+
+Pants can download other tools via
+[backends](https://www.pantsbuild.org/2.20/docs/using-pants/key-concepts/backends).
+This installation is reproducable by design, but binary packages like `ruff`
+probably won't work on nixos. To make them work we need some mechanism to tell
+pants to use preinstalled package from nix store.
+
 ## Classic nix
 
 Add channel:
