@@ -5,6 +5,6 @@
     import <nixpkgs> {
       overlays = [rust_overlay];
     },
-}: {
-  stable = pkgs.callPackage ./stable {};
-}
+}: (
+  pkgs.callPackage ./tags {}
+)

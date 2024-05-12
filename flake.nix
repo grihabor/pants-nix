@@ -18,9 +18,8 @@
     };
     pants-bin = pkgs.callPackage ./. {};
   in {
-    packages.${system} = {
-      "release_2.20.0" = pants-bin.stable."2.20.0";
-      "release_2.20.1" = pants-bin.stable."2.20.1";
+    packages.${system} = with pants-bin; {
+      inherit "release_2.20.0" "release_2.20.1";
     };
   };
 }

@@ -9,5 +9,5 @@
 pkgs.mkShell {
   nativeBuildInputs = let
     pants-bin = pkgs.callPackage ./. {};
-  in [pants-bin.stable."2.20.1"];
+  in [pants-bin."release_2.20.1"];
 }
