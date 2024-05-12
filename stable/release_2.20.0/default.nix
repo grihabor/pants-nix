@@ -1,5 +1,5 @@
 let
-  lib = import ./template.nix;
+  lib = import ../lib.nix;
   version = "2.20.0";
   rustVersion = "1.75.0";
   cargoLock = {
