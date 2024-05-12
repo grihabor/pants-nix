@@ -5,6 +5,9 @@
     import <nixpkgs> {
       overlays = [rust_overlay];
     },
-}: {
-  pants = pkgs.callPackage ./pants.nix {};
+}:
+pkgs.mkShell {
+  nativeBuildInputs = let
+    pants-bin = pkgs.callPackage ./. {};
+  in [pants-bin.stable."2.20.0"];
 }
