@@ -33,6 +33,7 @@ nix-build '<pants-nix>' -A '"release_2.20.0"'
 Or install via `nix-env`:
 
 ```bash
+nix-env -iA 'pants-nix."release_2.20.0"'
 ```
 
 ## Nix flakes
@@ -53,6 +54,13 @@ Using in a flake:
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
+  outputs = {
+    ...
+    pants-nix,
+  }:
+    devShells."x86_64-linux".default = pkgs.mkShell {
+      packages = [pants-bin."release_2.20.0"];
+    };
 ```
 
 ## Development
