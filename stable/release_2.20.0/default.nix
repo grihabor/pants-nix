@@ -160,6 +160,6 @@ in
       postInstall = ''
         wrapProgram "$out/bin/pants" \
           --set NO_SCIE_WARNING 1 \
-          --run ". .pants.bootstrap"
+          --run "if [ -f .pants.bootstrap ]; then . .pants.bootstrap; fi"
       '';
     }
