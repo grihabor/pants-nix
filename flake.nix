@@ -12,11 +12,12 @@
     rust-overlay,
   }: let
     system = "x86_64-linux";
-    nixpkgs = nixpkgs.legacyPackages.x86_64-linux;
     pkgs = import nixpkgs {
-      overlays = [(import rust-overlay)];
+      inherit system;
+      overlays = [rust-overlay.overlays.default];
     };
+    pants-bin = pkgs.callPackage ./. {};
   in {
-    packages.x86_64-linux.default = pkgs.callPackage ./. {};
+    packages.${system}.default = pants-bin.stable."2.20.0";
   };
 }

@@ -81,7 +81,7 @@ in
       ];
 
       # curl -L -O https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/3rdparty/python/requirements.txt
-      dependencies = [
+      buildInputs = [
         ansicolors
         packaging
         pex
