@@ -138,7 +138,7 @@ in
         include src/python/pants/_version/VERSION
         include src/python/pants/engine/internals/native_engine.so
         include src/python/pants/bin/native_client
-        recursive-include src/python/pants *.lock *.java *.scala
+        recursive-include src/python/pants *.lock *.java *.scala *.lockfile.txt
         EOF
 
         find src/python -type d -exec touch {}/__init__.py \;
