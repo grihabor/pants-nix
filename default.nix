@@ -5,6 +5,6 @@
     import <nixpkgs> {
       overlays = [rust_overlay];
     },
-}: (
-  pkgs.callPackage ./tags {}
-)
+}: {
+  pants-bin = pkgs.callPackage ./tags {};
+}

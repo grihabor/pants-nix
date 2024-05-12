@@ -16,9 +16,9 @@
       inherit system;
       overlays = [rust-overlay.overlays.default];
     };
-    pants-bin = pkgs.callPackage ./. {};
+    pantspkgs = pkgs.callPackage ./. {};
   in {
-    packages.${system} = with pants-bin; {
+    packages.${system} = with pantspkgs.pants-bin; {
       inherit "release_2.20.0" "release_2.20.1";
     };
   };
