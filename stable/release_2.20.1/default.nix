@@ -1,6 +1,6 @@
 let
-  lib = import ./template.nix;
-  version = "2.20.0";
+  lib = import ../lib.nix;
+  version = "2.20.1";
   rustVersion = "1.75.0";
   cargoLock = {
     # curl -L -o Cargo.lock https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/src/rust/engine/Cargo.lock
