@@ -76,12 +76,12 @@ in
       pname = "pants";
       pyproject = true;
 
-      build-system = [
+      buildInputs = [
         setuptools
       ];
 
       # curl -L -O https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/3rdparty/python/requirements.txt
-      buildInputs = [
+      propagatedBuildInputs = [
         ansicolors
         packaging
         pex
