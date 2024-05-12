@@ -1,0 +1,39 @@
+diff --git a/src/python/pants/pantsd/process_manager.py b/src/python/pants/pantsd/process_manager.py
+index ca1defc044..380d76c9bb 100644
+--- a/src/python/pants/pantsd/process_manager.py
++++ b/src/python/pants/pantsd/process_manager.py
+@@ -559,4 +559,33 @@ class PantsDaemonProcessManager(ProcessManager, metaclass=ABCMeta):
+         logger.debug(f"pantsd command is: {spawn_control_env_vars} {cmd_line}")
+
+         # TODO: Improve error handling on launch failures.
+-        os.spawnve(os.P_NOWAIT, sys.executable, cmd, env=exec_env)
++
++        #############
++        # nix patch #
++        #############
++
++        shebang = _maybe_read_shebang(sys.argv[0])
++
++        if shebang is None:
++            logger.debug(f"running spawnve: {sys.executable} {cmd}")
++            os.spawnve(os.P_NOWAIT, sys.executable, cmd, env=exec_env)
++        else:
++            exe, args = shebang[0], [*shebang[1:], *sys.argv]
++            logger.debug(f"running spawnve: {exe} {args}")
++            os.spawnve(os.P_NOWAIT, exe, args, env=exec_env)
++
++
++def _maybe_read_shebang(path: str) -> List[str]:
++    with open(sys.argv[0], "rb") as f:
++        two_bytes = f.read(2)
++        if two_bytes != b"#!":
++            return []
++
++        line = f.readline().decode("utf-8").strip()
++
++    return shlex.split(line)
++
++
++# The imports are intentionally at the bottom to reduce the chance of failed patch.
++import shlex
++from typing import List
