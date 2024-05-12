@@ -1,7 +1,8 @@
 let
   makePants = {
-    rustVersion ? "1.75.0",
-    version ? "2.20.0",
+    version,
+    hash,
+    rustVersion,
     cargoLock,
   }: (
     {
@@ -19,10 +20,10 @@ let
         inherit cargo rustc;
       };
       src = fetchFromGitHub {
+        inherit hash;
         owner = "pantsbuild";
         repo = "pants";
         rev = "release_${version}";
-        hash = "sha256-tzpeYxzDfHbDkGAOCXjQfaLf6834c34zJS3DwahSMwI=";
       };
       pants-engine = stdenv.mkDerivation rec {
         inherit src version;

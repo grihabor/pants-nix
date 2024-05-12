@@ -1,6 +1,9 @@
 let
   lib = import ../lib.nix;
+
   version = "2.20.1";
+  hash = "sha256-SGgMCJ1IzqXnVLId21//Xlf2VCJo0CHD7f4J7QnbGNk=";
+
   rustVersion = "1.75.0";
   cargoLock = {
     # curl -L -o Cargo.lock https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/src/rust/engine/Cargo.lock
@@ -17,5 +20,5 @@ let
   };
 in
   lib.makePants {
-    inherit version rustVersion cargoLock;
+    inherit version hash rustVersion cargoLock;
   }
