@@ -1,0 +1,14 @@
+diff --git a/src/python/pants/jvm/jar_tool/jar_tool.py b/src/python/pants/jvm/jar_tool/jar_tool.py
+index 92a2cef935..c792fa566a 100644
+--- a/src/python/pants/jvm/jar_tool/jar_tool.py
++++ b/src/python/pants/jvm/jar_tool/jar_tool.py
+@@ -206,6 +206,9 @@ def _load_jar_tool_sources() -> list[FileContent]:
+         # pkg_path = package.replace(".", os.path.sep)
+         # relative_folder = os.path.join("src", pkg_path)
+         for basename in pkg_resources.resource_listdir(__name__, package):
++            if basename.endswith("*.java"):
++                continue
++
+             result.append(
+                 FileContent(
+                     path=os.path.join(package, basename),

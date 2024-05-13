@@ -133,11 +133,12 @@ let
             recursive-include src/python/pants *.lock *.java *.scala *.lockfile.txt
             EOF
 
-            find src/python -type d -exec touch {}/__init__.py \;
+            find src/python -type d -exec bash -c "if [ -n \"$ls {}/*.py\" ]; then touch {}/__init__.py; fi" \;
           '';
 
           prePatch = ''
-            patch -p1 --batch -u -i ${./patch.txt}
+            patch -p1 --batch -u -i ${./patch-process-manager.txt}
+            patch -p1 --batch -u -i ${./patch-jar-tool.txt}
           '';
 
           preBuild = ''
