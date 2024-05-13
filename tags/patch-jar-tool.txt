@@ -6,7 +6,7 @@ index 92a2cef935..c792fa566a 100644
          # pkg_path = package.replace(".", os.path.sep)
          # relative_folder = os.path.join("src", pkg_path)
          for basename in pkg_resources.resource_listdir(__name__, package):
-+            if basename.endswith("*.java"):
++            if not basename.endswith("*.java"):
 +                continue
 +
              result.append(
