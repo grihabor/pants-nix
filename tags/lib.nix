@@ -75,17 +75,27 @@ let
           # curl -L -O https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/3rdparty/python/requirements.txt
           propagatedBuildInputs = [
             ansicolors
+            chevron
+            fasteners
+            freezegun
+            ijson
+            node-semver
             packaging
             pex
             psutil
+            pytest
             python-lsp-jsonrpc
             pyyaml
+            requests
             setproctitle
             setuptools
             toml
+            types-freezegun
+            types-pyyaml
+            types-requests
+            types-setuptools
+            types-toml
             typing-extensions
-            fasteners
-            pytest
           ];
 
           # https://github.com/pantsbuild/pants/blob/release_2.20.0/src/python/pants/BUILD#L27-L39
