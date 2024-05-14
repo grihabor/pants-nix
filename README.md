@@ -2,6 +2,8 @@
 
 Nix packages for [pants build system](https://www.pantsbuild.org/).
 
+:warning: The package interface is in the alpha stage and can change.
+
 ## Nuances
 
 Official [pants launcher](https://github.com/pantsbuild/scie-pants) can read
