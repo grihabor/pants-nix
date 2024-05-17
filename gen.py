@@ -191,7 +191,7 @@ def _generate_list_of_packages():
         f.write("{pkgs}: {\n")
         for v in versions:
             tag = f"release_{v}"
-            f.write(f'  "{tag}" = pkgs.callPackage ./{tag};\n')
+            f.write(f'  "{tag}" = pkgs.callPackage ./{tag} {{}};\n')
         f.write("}\n")
 
 
