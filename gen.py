@@ -1,6 +1,6 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i python3.12 --pure
-#! nix-shell -p python312 git python312Packages.requests
+#! nix-shell -p python312 git nix python312Packages.requests
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import requests
 
@@ -62,6 +63,20 @@ class Repo:
         sp.check_call(shlex.split(f"git -C {self.path} checkout {tag}"))
         return (self.path / path).read_text()
 
+    def tag_hash(self, tag: str) -> str:
+        with TemporaryDirectory() as d:
+            archive = Path(d) / "archive.tar.gz"
+            sp.check_call(shlex.split(f"git -C {self.path} archive -o {archive} {tag}"))
+            path = Path(d) / f"{tag}.tar.gz"
+            path.mkdir()
+            sp.check_call(shlex.split(f"tar -xf {archive} -C {path}"))
+            sp.check_call(shlex.split(f"find {path} -maxdepth 1"))
+            result = sp.check_output(
+                shlex.split(f"nix-hash --type sha256 --base32 --sri {path}")
+            )
+
+        return result.decode(encoding="utf-8").strip()
+
 
 def main():
     logging.basicConfig(level=logging.INFO)
@@ -89,7 +104,7 @@ def main():
     result = string.Template(template_string).safe_substitute(
         version=args.version,
         args=shlex.join(sys.argv),
-        hash="",
+        hash=repo.tag_hash(tag),
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",

@@ -4,7 +4,7 @@ let
   lib = import ../lib.nix;
 
   version = "2.20.0";
-  hash = "";
+  hash = "sha256-tzpeYxzDfHbDkGAOCXjQfaLf6834c34zJS3DwahSMwI=";
 
   # https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/src/rust/engine/rust-toolchain
   rustVersion = "1.75.0";
