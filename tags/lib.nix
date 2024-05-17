@@ -7,13 +7,13 @@ let
   }: (
     {
       fetchFromGitHub,
-      python310,
+      python3,
       stdenv,
       protobuf,
       rust-bin,
       makeRustPlatform,
     }: let
-      python = python310;
+      python = python3;
       cargo = rust-bin.stable.${rustVersion}.default;
       rustc = rust-bin.stable.${rustVersion}.default;
       rustPlatform = makeRustPlatform {
