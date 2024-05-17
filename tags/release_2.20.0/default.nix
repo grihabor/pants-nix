@@ -9,7 +9,7 @@ let
   # https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/src/rust/engine/rust-toolchain
   rustVersion = "1.75.0";
   cargoLock = {
-    # curl -L -o Cargo.lock https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/src/rust/engine/Cargo.lock
+    # https://raw.githubusercontent.com/pantsbuild/pants/release_2.20.0/src/rust/engine/Cargo.lock
     lockFile = ./Cargo.lock;
     outputHashes = {
       "console-0.15.7" = "sha256-EsUtBySVj2aoGOPBteDKCY7PCehJoqEJXpjOyQlpCf4=";

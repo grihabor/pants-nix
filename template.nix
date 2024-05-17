@@ -6,10 +6,10 @@ let
   version = "$version";
   hash = "$hash";
 
-  # https://raw.githubusercontent.com/pantsbuild/pants/release_$version/src/rust/engine/rust-toolchain
+  # $rust_toolchain_url
   rustVersion = "$rust_version";
   cargoLock = {
-    # curl -L -o Cargo.lock https://raw.githubusercontent.com/pantsbuild/pants/release_$version/src/rust/engine/Cargo.lock
+    # $cargo_lock_url
     lockFile = ./Cargo.lock;
     outputHashes = {
       "console-0.15.7" = "sha256-EsUtBySVj2aoGOPBteDKCY7PCehJoqEJXpjOyQlpCf4=";
