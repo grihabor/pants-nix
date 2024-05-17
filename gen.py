@@ -82,23 +82,9 @@ class Repo:
 
     def list_versions(self) -> list[Version]:
         _run(f"git -C {self.path} checkout origin/main")
-        tags = _run(f"git -C {self.path} tag --list release_*").decode("utf-8").splitlines()
-
-        versions = []
-        for tag in tags:
-            tag = tag.strip()
-            regex = r"^release_([0-9]+).([0-9]+).([0-9]+)(.*)$"
-            match = re.match(regex, tag)
-            assert match, tag
-            versions.append(
-                Version(
-                    major=int(match.group(1)),
-                    minor=int(match.group(2)),
-                    micro=int(match.group(3)),
-                    other=str(match.group(4)),
-                )
-            )
-
+        lines = _run(f"git -C {self.path} tag --list release_*").decode("utf-8").splitlines()
+        versions = [Version.from_tag(line.strip()) for line in lines]
+        versions.sort()
         return versions
 
 
@@ -106,7 +92,19 @@ class Version(NamedTuple):
     major: int
     minor: int
     micro: int
-    other: int
+    other: str
+
+    @classmethod
+    def from_tag(cls, tag: str) -> Version:
+        regex = r"^release_([0-9]+).([0-9]+).([0-9]+)(.*)$"
+        match = re.match(regex, tag)
+        assert match, tag
+        return Version(
+            major=int(match.group(1)),
+            minor=int(match.group(2)),
+            micro=int(match.group(3)),
+            other=str(match.group(4)),
+        )
 
     def __format__(self, __format_spec: str) -> str:
         return f"{self.major}.{self.minor}.{self.micro}{self.other}"
@@ -122,8 +120,9 @@ def main():
     tag_command.add_argument("version")
     tag_command.set_defaults(entrypoint=generate_single_tag)
 
-    bulk_command = subparsers.add_parser("all")
-    bulk_command.set_defaults(entrypoint=generate_many_tags)
+    all_command = subparsers.add_parser("all")
+    all_command.add_argument("--force", action=argparse.BooleanOptionalAction)
+    all_command.set_defaults(entrypoint=generate_many_tags)
 
     args = parser.parse_args()
     args.entrypoint(args)
@@ -140,7 +139,9 @@ def generate_many_tags(args: Any):
         return
 
     for version in versions:
-        _generate_tag(repo, version)
+        _generate_tag(repo, version, force=args.force)
+
+    _generate_list_of_packages()
 
 
 def generate_single_tag(args: Any):
@@ -148,12 +149,17 @@ def generate_single_tag(args: Any):
     repo.fetch()
     version = args.version
     _generate_tag(repo, version)
+    _generate_list_of_packages()
 
 
-def _generate_tag(repo: Repo, version: str):
+def _generate_tag(repo: Repo, version: str, force: bool = False):
     tag = f"release_{version}"
 
     tag_dir = Path("tags") / tag
+    if not force and tag_dir.exists():
+        logger.info(f"dir {tag_dir} exists, skipping")
+        return
+
     tag_dir.mkdir(exist_ok=True)
 
     cargo_lock = repo.read_file(path="src/rust/engine/Cargo.lock", tag=tag)
@@ -172,6 +178,21 @@ def _generate_tag(repo: Repo, version: str):
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
     )
     (tag_dir / "default.nix").write_text(result)
+
+
+def _generate_list_of_packages():
+    tags_dir = Path("tags")
+    dirs = next(os.walk(tags_dir))[1]
+    versions = [Version.from_tag(d) for d in dirs]
+    versions.sort()
+
+    path = Path("tags") / "default.nix"
+    with open(path, "w") as f:
+        f.write("{pkgs}: {\n")
+        for v in versions:
+            tag = f"release_{v}"
+            f.write(f'  "{tag}" = pkgs.callPackage ./{tag};\n')
+        f.write("}\n")
 
 
 if __name__ == "__main__":
