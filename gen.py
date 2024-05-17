@@ -7,15 +7,17 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import shlex
 import string
 import subprocess as sp
 import sys
 from dataclasses import dataclass
+from functools import total_ordering
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Any, NamedTuple
 
 import requests
 import tomllib
@@ -78,9 +80,36 @@ class Repo:
 
         return result.decode(encoding="utf-8").strip()
 
-    def list_tags(self) -> str:
-        hashes = _run(f'git -C {self.path} log --tags --pretty="format:%ai" origin/main').decode("utf-8").split()
-        print(hashes)
+    def list_versions(self) -> list[Version]:
+        _run(f"git -C {self.path} checkout origin/main")
+        tags = _run(f"git -C {self.path} tag --list release_*").decode("utf-8").splitlines()
+
+        versions = []
+        for tag in tags:
+            tag = tag.strip()
+            regex = r"^release_([0-9]+).([0-9]+).([0-9]+)(.*)$"
+            match = re.match(regex, tag)
+            assert match, tag
+            versions.append(
+                Version(
+                    major=int(match.group(1)),
+                    minor=int(match.group(2)),
+                    micro=int(match.group(3)),
+                    other=str(match.group(4)),
+                )
+            )
+
+        return versions
+
+
+class Version(NamedTuple):
+    major: int
+    minor: int
+    micro: int
+    other: int
+
+    def __format__(self, __format_spec: str) -> str:
+        return f"{self.major}.{self.minor}.{self.micro}{self.other}"
 
 
 def main():
@@ -93,15 +122,35 @@ def main():
     tag_command.add_argument("version")
     tag_command.set_defaults(entrypoint=generate_single_tag)
 
+    bulk_command = subparsers.add_parser("all")
+    bulk_command.set_defaults(entrypoint=generate_many_tags)
+
     args = parser.parse_args()
     args.entrypoint(args)
+
+
+def generate_many_tags(args: Any):
+    repo = Repo.default()
+    repo.fetch()
+
+    versions = [f"{version}" for version in repo.list_versions() if version.major >= 2 and version.minor >= 19]
+
+    print("Going to generate these versions:", versions)
+    if input("Continue? [y/n] ").lower() not in ("y", "yes"):
+        return
+
+    for version in versions:
+        _generate_tag(repo, version)
 
 
 def generate_single_tag(args: Any):
     repo = Repo.default()
     repo.fetch()
-
     version = args.version
+    _generate_tag(repo, version)
+
+
+def _generate_tag(repo: Repo, version: str):
     tag = f"release_{version}"
 
     tag_dir = Path("tags") / tag
@@ -115,8 +164,8 @@ def generate_single_tag(args: Any):
 
     template_string = Path("template.nix").read_text()
     result = string.Template(template_string).safe_substitute(
-        version=args.version,
-        args=shlex.join(sys.argv),
+        version=version,
+        args=f"{sys.argv[0]} tag {version}",
         hash=repo.tag_hash(tag),
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
