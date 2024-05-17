@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import requests
 import tomllib
@@ -77,14 +78,26 @@ class Repo:
 
         return result.decode(encoding="utf-8").strip()
 
+    def list_tags(self) -> str:
+        hashes = _run(f'git -C {self.path} log --tags --pretty="format:%ai" origin/main').decode("utf-8").split()
+        print(hashes)
+
 
 def main():
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("version")
-    args = parser.parse_args()
+    subparsers = parser.add_subparsers()
 
+    tag_command = subparsers.add_parser("tag")
+    tag_command.add_argument("version")
+    tag_command.set_defaults(entrypoint=generate_single_tag)
+
+    args = parser.parse_args()
+    args.entrypoint(args)
+
+
+def generate_single_tag(args: Any):
     repo = Repo.default()
     repo.fetch()
 

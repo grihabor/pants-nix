@@ -2,3 +2,8 @@ line-length = 120
 
 [lint]
 select = ["I"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+
