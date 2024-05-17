@@ -8,18 +8,16 @@ import argparse
 import logging
 import os
 import shlex
-import shutil
 import string
 import subprocess as sp
 import sys
-import tomllib
-from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import requests
+import tomllib
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +38,10 @@ def download_toml(*, url: str):
     return result
 
 
+def _run(command: str) -> bytes:
+    return sp.check_output(shlex.split(command))
+
+
 @dataclass(frozen=True)
 class Repo:
     path: Path
@@ -55,25 +57,23 @@ class Repo:
     def fetch(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
-            sp.check_call(shlex.split(f"git clone {self.url} {self.path}"))
+            _run(f"git clone {self.url} {self.path}")
 
-        sp.check_call(shlex.split(f"git -C {self.path} fetch origin"))
+        _run(f"git -C {self.path} fetch origin")
 
     def read_file(self, path: str, tag: str) -> str:
-        sp.check_call(shlex.split(f"git -C {self.path} checkout {tag}"))
+        _run(f"git -C {self.path} checkout {tag}")
         return (self.path / path).read_text()
 
     def tag_hash(self, tag: str) -> str:
         with TemporaryDirectory() as d:
             archive = Path(d) / "archive.tar.gz"
-            sp.check_call(shlex.split(f"git -C {self.path} archive -o {archive} {tag}"))
+            _run(f"git -C {self.path} archive -o {archive} {tag}")
             path = Path(d) / f"{tag}.tar.gz"
             path.mkdir()
-            sp.check_call(shlex.split(f"tar -xf {archive} -C {path}"))
-            sp.check_call(shlex.split(f"find {path} -maxdepth 1"))
-            result = sp.check_output(
-                shlex.split(f"nix-hash --type sha256 --base32 --sri {path}")
-            )
+            _run(f"tar -xf {archive} -C {path}")
+            _run(f"find {path} -maxdepth 1")
+            result = _run(f"nix-hash --type sha256 --base32 --sri {path}")
 
         return result.decode(encoding="utf-8").strip()
 
