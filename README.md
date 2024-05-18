@@ -38,6 +38,25 @@ Or install via `nix-env`:
 nix-env -iA 'pants-nix."release_2.20.0"'
 ```
 
+## Docker container
+
+Spin up a container:
+
+```bash
+docker run -it -e NIX_PATH=nixpkgs=channel:nixos-23.11 nixpkgs/nix:nixos-23.11 bash
+```
+
+Then inside the container:
+
+```bash
+nix-channel --add https://github.com/grihabor/pants-nix/archive/main.tar.gz pants-nix
+nix-channel --update
+nix-env -iA 'pants-nix."release_2.20.0"'
+export PATH="$PATH:$(nix-env --query --out-path --no-name pants)/bin"
+touch pants.toml
+pants --version
+```
+
 ## Nix flakes
 
 Adhoc shell:
