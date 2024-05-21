@@ -46,6 +46,7 @@
   "release_2.21.0.dev6" = pkgs.callPackage ./release_2.21.0.dev6 {};
   "release_2.21.0a0" = pkgs.callPackage ./release_2.21.0a0 {};
   "release_2.21.0a1" = pkgs.callPackage ./release_2.21.0a1 {};
+  "release_2.21.0rc0" = pkgs.callPackage ./release_2.21.0rc0 {};
   "release_2.22.0.dev0" = pkgs.callPackage ./release_2.22.0.dev0 {};
   "release_2.22.0.dev1" = pkgs.callPackage ./release_2.22.0.dev1 {};
   "release_2.22.0.dev2" = pkgs.callPackage ./release_2.22.0.dev2 {};
