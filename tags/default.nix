@@ -17,6 +17,7 @@
   "release_2.19.1rc1" = pkgs.callPackage ./release_2.19.1rc1 {};
   "release_2.19.2" = pkgs.callPackage ./release_2.19.2 {};
   "release_2.19.2rc0" = pkgs.callPackage ./release_2.19.2rc0 {};
+  "release_2.19.3" = pkgs.callPackage ./release_2.19.3 {};
   "release_2.19.3rc0" = pkgs.callPackage ./release_2.19.3rc0 {};
   "release_2.19.3rc1" = pkgs.callPackage ./release_2.19.3rc1 {};
   "release_2.20.0" = pkgs.callPackage ./release_2.20.0 {};
@@ -36,7 +37,9 @@
   "release_2.20.0rc4" = pkgs.callPackage ./release_2.20.0rc4 {};
   "release_2.20.1" = pkgs.callPackage ./release_2.20.1 {};
   "release_2.20.1rc0" = pkgs.callPackage ./release_2.20.1rc0 {};
+  "release_2.20.2" = pkgs.callPackage ./release_2.20.2 {};
   "release_2.20.2rc0" = pkgs.callPackage ./release_2.20.2rc0 {};
+  "release_2.21.0" = pkgs.callPackage ./release_2.21.0 {};
   "release_2.21.0.dev0" = pkgs.callPackage ./release_2.21.0.dev0 {};
   "release_2.21.0.dev1" = pkgs.callPackage ./release_2.21.0.dev1 {};
   "release_2.21.0.dev2" = pkgs.callPackage ./release_2.21.0.dev2 {};
@@ -50,4 +53,6 @@
   "release_2.22.0.dev0" = pkgs.callPackage ./release_2.22.0.dev0 {};
   "release_2.22.0.dev1" = pkgs.callPackage ./release_2.22.0.dev1 {};
   "release_2.22.0.dev2" = pkgs.callPackage ./release_2.22.0.dev2 {};
+  "release_2.22.0.dev3" = pkgs.callPackage ./release_2.22.0.dev3 {};
+  "release_2.22.0a0" = pkgs.callPackage ./release_2.22.0a0 {};
 }
