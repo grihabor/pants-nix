@@ -68,20 +68,35 @@ nix shell 'github:grihabor/pants-nix#"release_2.20.0"' --command pants --version
 Using in a flake:
 
 ```nix
+{
   inputs = {
-    ...
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     pants-nix = {
       url = "github:grihabor/pants-nix/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
+
   outputs = {
-    ...
+    self,
+    nixpkgs,
     pants-nix,
-  }:
+  }: let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+  in {
     devShells."x86_64-linux".default = pkgs.mkShell {
-      packages = [pants-nix."release_2.20.0"];
+      packages = [
+        pants-nix.packages."x86_64-linux"."release_2.21.0"
+      ];
     };
+  };
+}
+```
+
+List available packages:
+```bash
+nix search github:grihabor/pants-nix ^
 ```
 
 ## Development
