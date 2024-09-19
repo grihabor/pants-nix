@@ -1,11 +1,12 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i python3.12 --pure
-#! nix-shell -p python312 git nix python312Packages.requests
+#! nix-shell -p python312 git nix python312Packages.requests nix-prefetch-git
 
 from __future__ import annotations
 
 import argparse
 import logging
+import json
 import os
 import re
 import shlex
@@ -17,12 +18,14 @@ from functools import total_ordering
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, NamedTuple
+from typing import Any, Generator, NamedTuple
 
 import requests
 import tomllib
 
 logger = logging.getLogger(__name__)
+
+git_url_re = re.compile(r"^git\+(https://[^/]+/[^/]+/[^/.?]+(.git)?)(\?rev=[^#]+|)(#.*|)$")
 
 
 def _run(command: str) -> bytes:
@@ -71,6 +74,40 @@ def generate_single_tag(args: Any):
     _generate_list_of_packages()
 
 
+def _nix_prefetch_git(url: str, rev: str) -> str:
+    return _run(f"nix-prefetch-git {url} --rev {rev} --quiet").decode("utf-8")
+
+
+def _prefetch_output_hashes(cargo_lock: str) -> str:
+    output_hashes = []
+    for package in tomllib.loads(cargo_lock)["package"]:
+        source = package.get("source", "")
+        if not source.startswith("git+"):
+            continue
+        name = package["name"]
+        version = package["version"]
+        m = git_url_re.match(source)
+        if not m:
+            logger.warning(
+                "git package %s-%s has invalid source %s, skipping prefetch",
+                name,
+                version,
+                source,
+            )
+            continue
+        url, rev1, rev2 = m.group(1, 3, 4)
+        rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
+        result = json.loads(_nix_prefetch_git(url, rev))
+        output_hashes.append(f"\"{name}-{version}\" = \"{result.get("hash")}\";")
+
+    if output_hashes:
+        return f"""
+    outputHashes = {{
+      {"\n      ".join(output_hashes)}
+    }};"""
+    return ""
+
+
 def _generate_tag(repo: Repo, version: str, force: bool = False):
     tag = f"release_{version}"
 
@@ -87,7 +124,9 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
     rust_toolchain = repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
     rust_version = tomllib.loads(rust_toolchain)["toolchain"]["channel"]
 
-    template_string = Path("template.nix").read_text()
+    output_hashes = list(_prefetch_output_hashes(cargo_lock))
+
+    template_string = Path("template.nix").read_text("utf-8")
     result = string.Template(template_string).safe_substitute(
         version=version,
         args=f"{sys.argv[0]} tag {version}",
@@ -95,6 +134,7 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
+        output_hashes=_prefetch_output_hashes(cargo_lock),
     )
     (tag_dir / "default.nix").write_text(result)
 
