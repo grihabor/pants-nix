@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 git_url_re = re.compile(r"^git\+(https://[^/]+/[^/]+/[^/.?]+(.git)?)(\?rev=[^#]+|)(#.*|)$")
 
+output_hash_overrides = json.loads(Path("output_hash_overrides.json").read_text("utf-8"))
+
 
 def _run(command: str) -> bytes:
     return sp.check_output(shlex.split(command))
@@ -40,6 +42,7 @@ def main():
 
     tag_command = subparsers.add_parser("tag")
     tag_command.add_argument("version")
+    tag_command.add_argument("--force", action=argparse.BooleanOptionalAction)
     tag_command.set_defaults(entrypoint=generate_single_tag)
 
     all_command = subparsers.add_parser("all")
@@ -70,7 +73,7 @@ def generate_single_tag(args: Any):
     repo = Repo.default()
     repo.fetch()
     version = args.version
-    _generate_tag(repo, version)
+    _generate_tag(repo, version, force=args.force)
     _generate_list_of_packages()
 
 
@@ -79,26 +82,27 @@ def _nix_prefetch_git(url: str, rev: str) -> str:
 
 
 def _prefetch_output_hashes(cargo_lock: str) -> str:
-    output_hashes = []
+    output_hashes = set()
     for package in tomllib.loads(cargo_lock)["package"]:
         source = package.get("source", "")
         if not source.startswith("git+"):
             continue
-        name = package["name"]
-        version = package["version"]
-        m = git_url_re.match(source)
-        if not m:
-            logger.warning(
-                "git package %s-%s has invalid source %s, skipping prefetch",
-                name,
-                version,
-                source,
-            )
-            continue
-        url, rev1, rev2 = m.group(1, 3, 4)
-        rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
-        result = json.loads(_nix_prefetch_git(url, rev))
-        output_hashes.append(f"\"{name}-{version}\" = \"{result.get("hash")}\";")
+
+        pname = f"{package["name"]}-{package["version"]}"
+        hash_ = output_hash_overrides.get(pname)
+        if hash_ is None:
+            m = git_url_re.match(source)
+            if not m:
+                logger.warning(
+                    "git package %s has invalid source %s, skipping prefetch",
+                    pname,
+                    source,
+                )
+                continue
+            url, rev1, rev2 = m.group(1, 3, 4)
+            rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
+            hash_ = json.loads(_nix_prefetch_git(url, rev)).get("hash")
+        output_hashes.add(f'"{pname}" = "{hash_}";')
 
     if output_hashes:
         return f"""
