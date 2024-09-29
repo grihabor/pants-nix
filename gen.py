@@ -128,8 +128,6 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
     rust_toolchain = repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
     rust_version = tomllib.loads(rust_toolchain)["toolchain"]["channel"]
 
-    output_hashes = list(_prefetch_output_hashes(cargo_lock))
-
     template_string = Path("template.nix").read_text("utf-8")
     result = string.Template(template_string).safe_substitute(
         version=version,
