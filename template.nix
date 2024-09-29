@@ -10,7 +10,10 @@ let
   rustVersion = "$rust_version";
   cargoLock = {
     # $cargo_lock_url
-    lockFile = ./Cargo.lock;$output_hashes
+    lockFile = ./Cargo.lock;
+    outputHashes = {
+      $output_hashes
+    };
   };
 in
   lib.makePants {

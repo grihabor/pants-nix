@@ -81,35 +81,20 @@ def _nix_prefetch_git(url: str, rev: str) -> str:
     return _run(f"nix-prefetch-git {url} --rev {rev} --quiet").decode("utf-8")
 
 
-def _prefetch_output_hashes(cargo_lock: str) -> str:
-    output_hashes = set()
+def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
     for package in tomllib.loads(cargo_lock)["package"]:
         source = package.get("source", "")
-        if not source.startswith("git+"):
+        m = git_url_re.match(source)
+        if m is None:
             continue
 
         pname = f"{package["name"]}-{package["version"]}"
         hash_ = output_hash_overrides.get(pname)
         if hash_ is None:
-            m = git_url_re.match(source)
-            if not m:
-                logger.warning(
-                    "git package %s has invalid source %s, skipping prefetch",
-                    pname,
-                    source,
-                )
-                continue
             url, rev1, rev2 = m.group("url", "rev1", "rev2")
             rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
             hash_ = json.loads(_nix_prefetch_git(url, rev)).get("hash")
-        output_hashes.add(f'"{pname}" = "{hash_}";')
-
-    if output_hashes:
-        return f"""
-    outputHashes = {{
-      {"\n      ".join(output_hashes)}
-    }};"""
-    return ""
+        yield f'"{pname}" = "{hash_}";'
 
 
 def _generate_tag(repo: Repo, version: str, force: bool = False):
@@ -136,7 +121,7 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
-        output_hashes=_prefetch_output_hashes(cargo_lock),
+        output_hashes="\n      ".join(_prefetch_output_hashes(cargo_lock)),
     )
     (tag_dir / "default.nix").write_text(result)
 
