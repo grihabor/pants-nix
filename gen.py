@@ -89,6 +89,10 @@ def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
             continue
 
         pname = f"{package["name"]}-{package["version"]}"
+        # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the 
+        # prefetched hash. To address this we include a hard-coded, known-good
+        # set of hash overrides. If we find pname in output_hash_overrides.json
+        # we use the provided hash instead of prefetching.
         hash_ = output_hash_overrides.get(pname)
         if hash_ is None:
             url, rev1, rev2 = m.group("url", "rev1", "rev2")
