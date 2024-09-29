@@ -25,7 +25,7 @@ import tomllib
 
 logger = logging.getLogger(__name__)
 
-git_url_re = re.compile(r"^git\+(https://[^/]+/[^/]+/[^/.?]+(.git)?)(\?rev=[^#]+|)(#.*|)$")
+git_url_re = re.compile(r"^git\+(?P<url>https://[^/]+/[^/]+/[^/.?]+(.git)?)(?P<rev1>\?rev=[^#]+|)(?P<rev2>#.*|)$")
 
 output_hash_overrides = json.loads(Path("output_hash_overrides.json").read_text("utf-8"))
 
@@ -99,7 +99,7 @@ def _prefetch_output_hashes(cargo_lock: str) -> str:
                     source,
                 )
                 continue
-            url, rev1, rev2 = m.group(1, 3, 4)
+            url, rev1, rev2 = m.group("url", "rev1", "rev2")
             rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
             hash_ = json.loads(_nix_prefetch_git(url, rev)).get("hash")
         output_hashes.add(f'"{pname}" = "{hash_}";')
