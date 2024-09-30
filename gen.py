@@ -1,18 +1,20 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i python3.12 --pure
-#! nix-shell -p python312 git nix python312Packages.requests nix-prefetch-git
+#! nix-shell -p python312 git nix python312Packages.requests python312Packages.aiofiles nix-prefetch-git
 
 from __future__ import annotations
 
 import argparse
-import logging
+import asyncio
 import json
+import logging
 import os
 import re
 import shlex
 import string
 import subprocess as sp
 import sys
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from functools import total_ordering
 from io import BytesIO
@@ -30,8 +32,19 @@ git_url_re = re.compile(r"^git\+(?P<url>https://[^/]+/[^/]+/[^/.?]+(.git)?)(?P<r
 output_hash_overrides = json.loads(Path("output_hash_overrides.json").read_text("utf-8"))
 
 
-def _run(command: str) -> bytes:
-    return sp.check_output(shlex.split(command))
+async def _run(command: str) -> str:
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        logger.error(f"{command!r} exited with {proc.returncode}, stderr:\n{stderr.decode()}")
+
+    return stdout.decode()
 
 
 def main():
@@ -53,7 +66,7 @@ def main():
     args.entrypoint(args)
 
 
-def generate_many_tags(args: Any):
+async def generate_many_tags(args: Any):
     repo = Repo.default()
     repo.fetch()
 
@@ -63,25 +76,26 @@ def generate_many_tags(args: Any):
     if input("Continue? [y/n] ").lower() not in ("y", "yes"):
         return
 
-    for version in versions:
-        _generate_tag(repo, version, force=args.force)
+    async with asyncio.TaskGroup() as tg:
+        for version in versions:
+            tg.create_task(_generate_tag(repo, version, force=args.force))
 
     _generate_list_of_packages()
 
 
-def generate_single_tag(args: Any):
+async def generate_single_tag(args: Any) -> None:
     repo = Repo.default()
     repo.fetch()
     version = args.version
-    _generate_tag(repo, version, force=args.force)
+    await _generate_tag(repo, version, force=args.force)
     _generate_list_of_packages()
 
 
-def _nix_prefetch_git(url: str, rev: str) -> str:
-    return _run(f"nix-prefetch-git {url} --rev {rev} --quiet").decode("utf-8")
+async def _nix_prefetch_git(url: str, rev: str) -> str:
+    return await _run(f"nix-prefetch-git {url} --rev {rev} --quiet")
 
 
-def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
+async def _prefetch_output_hashes(cargo_lock: str) -> AsyncGenerator[str, None]:
     for package in tomllib.loads(cargo_lock)["package"]:
         source = package.get("source", "")
         m = git_url_re.match(source)
@@ -89,7 +103,7 @@ def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
             continue
 
         pname = f"{package["name"]}-{package["version"]}"
-        # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the 
+        # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the
         # prefetched hash. To address this we include a hard-coded, known-good
         # set of hash overrides. If we find pname in output_hash_overrides.json
         # we use the provided hash instead of prefetching.
@@ -97,11 +111,12 @@ def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
         if hash_ is None:
             url, rev1, rev2 = m.group("url", "rev1", "rev2")
             rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
-            hash_ = json.loads(_nix_prefetch_git(url, rev)).get("hash")
+            raw = await _nix_prefetch_git(url, rev)
+            hash_ = json.loads(raw).get("hash")
         yield f'"{pname}" = "{hash_}";'
 
 
-def _generate_tag(repo: Repo, version: str, force: bool = False):
+async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     tag = f"release_{version}"
 
     tag_dir = Path("tags") / tag
@@ -157,32 +172,32 @@ class Repo:
             path=Path(os.environ["HOME"]) / ".cache" / "pants-nix" / "pants",
         )
 
-    def fetch(self) -> None:
+    async def fetch(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
-            _run(f"git clone {self.url} {self.path}")
+            await _run(f"git clone {self.url} {self.path}")
 
-        _run(f"git -C {self.path} fetch origin")
+        await _run(f"git -C {self.path} fetch origin")
 
-    def read_file(self, path: str, tag: str) -> str:
-        _run(f"git -C {self.path} checkout {tag}")
+    async def read_file(self, path: str, tag: str) -> str:
+        await _run(f"git -C {self.path} checkout {tag}")
         return (self.path / path).read_text()
 
-    def tag_hash(self, tag: str) -> str:
+    async def tag_hash(self, tag: str) -> str:
         with TemporaryDirectory() as d:
             archive = Path(d) / "archive.tar.gz"
-            _run(f"git -C {self.path} archive -o {archive} {tag}")
+            await _run(f"git -C {self.path} archive -o {archive} {tag}")
             path = Path(d) / f"{tag}.tar.gz"
             path.mkdir()
-            _run(f"tar -xf {archive} -C {path}")
-            _run(f"find {path} -maxdepth 1")
-            result = _run(f"nix-hash --type sha256 --base32 --sri {path}")
+            await _run(f"tar -xf {archive} -C {path}")
+            await _run(f"find {path} -maxdepth 1")
+            result = await _run(f"nix-hash --type sha256 --base32 --sri {path}")
 
-        return result.decode(encoding="utf-8").strip()
+        return result.strip()
 
-    def list_versions(self) -> list[Version]:
-        _run(f"git -C {self.path} checkout origin/main")
-        lines = _run(f"git -C {self.path} tag --list release_*").decode("utf-8").splitlines()
+    async def list_versions(self) -> list[Version]:
+        await _run(f"git -C {self.path} checkout origin/main")
+        lines = (await _run(f"git -C {self.path} tag --list release_*")).splitlines()
         versions = [Version.from_tag(line.strip()) for line in lines]
         versions.sort()
         return versions
