@@ -149,6 +149,7 @@ let
           prePatch = ''
             patch -p1 --batch -u -i ${./patch-process-manager.txt}
             patch -p1 --batch -u -i ${./patch-jar-tool.txt}
+            patch -p1 --batch -u -i ${./patch-coursier-fetch.txt}
           '';
 
           preBuild = ''
