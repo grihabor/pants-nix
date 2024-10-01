@@ -1,11 +1,12 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i python3.12 --pure
-#! nix-shell -p python312 git nix python312Packages.requests
+#! nix-shell -p python312 git nix python312Packages.requests nix-prefetch-git
 
 from __future__ import annotations
 
 import argparse
 import logging
+import json
 import os
 import re
 import shlex
@@ -17,12 +18,16 @@ from functools import total_ordering
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, NamedTuple
+from typing import Any, Generator, NamedTuple
 
 import requests
 import tomllib
 
 logger = logging.getLogger(__name__)
+
+git_url_re = re.compile(r"^git\+(?P<url>https://[^/]+/[^/]+/[^/.?]+(.git)?)(?P<rev1>\?rev=[^#]+|)(?P<rev2>#.*|)$")
+
+output_hash_overrides = json.loads(Path("output_hash_overrides.json").read_text("utf-8"))
 
 
 def _run(command: str) -> bytes:
@@ -37,6 +42,7 @@ def main():
 
     tag_command = subparsers.add_parser("tag")
     tag_command.add_argument("version")
+    tag_command.add_argument("--force", action=argparse.BooleanOptionalAction)
     tag_command.set_defaults(entrypoint=generate_single_tag)
 
     all_command = subparsers.add_parser("all")
@@ -67,8 +73,32 @@ def generate_single_tag(args: Any):
     repo = Repo.default()
     repo.fetch()
     version = args.version
-    _generate_tag(repo, version)
+    _generate_tag(repo, version, force=args.force)
     _generate_list_of_packages()
+
+
+def _nix_prefetch_git(url: str, rev: str) -> str:
+    return _run(f"nix-prefetch-git {url} --rev {rev} --quiet").decode("utf-8")
+
+
+def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
+    for package in tomllib.loads(cargo_lock)["package"]:
+        source = package.get("source", "")
+        m = git_url_re.match(source)
+        if m is None:
+            continue
+
+        pname = f"{package["name"]}-{package["version"]}"
+        # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the 
+        # prefetched hash. To address this we include a hard-coded, known-good
+        # set of hash overrides. If we find pname in output_hash_overrides.json
+        # we use the provided hash instead of prefetching.
+        hash_ = output_hash_overrides.get(pname)
+        if hash_ is None:
+            url, rev1, rev2 = m.group("url", "rev1", "rev2")
+            rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
+            hash_ = json.loads(_nix_prefetch_git(url, rev)).get("hash")
+        yield f'"{pname}" = "{hash_}";'
 
 
 def _generate_tag(repo: Repo, version: str, force: bool = False):
@@ -87,7 +117,7 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
     rust_toolchain = repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
     rust_version = tomllib.loads(rust_toolchain)["toolchain"]["channel"]
 
-    template_string = Path("template.nix").read_text()
+    template_string = Path("template.nix").read_text("utf-8")
     result = string.Template(template_string).safe_substitute(
         version=version,
         args=f"{sys.argv[0]} tag {version}",
@@ -95,6 +125,7 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
+        output_hashes="\n      ".join(_prefetch_output_hashes(cargo_lock)),
     )
     (tag_dir / "default.nix").write_text(result)
 
