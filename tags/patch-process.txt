@@ -1,0 +1,16 @@
+diff --git a/src/python/pants/engine/process.py b/src/python/pants/engine/process.py
+index 9990a20b6..8ac991a54 100644
+--- a/src/python/pants/engine/process.py
++++ b/src/python/pants/engine/process.py
+@@ -124,6 +124,11 @@ class Process:
+         if isinstance(argv, str):
+             raise ValueError("argv must be a sequence of strings, but was a single string.")
+ 
++        import os
++        import json
++        if extra_env := os.environ.get("PANTS_PROCESS_EXTRA_ENV"):
++            env = {**json.loads(extra_env), **(env or {})}
++
+         object.__setattr__(self, "argv", tuple(argv))
+         object.__setattr__(self, "description", description)
+         object.__setattr__(self, "level", level)
