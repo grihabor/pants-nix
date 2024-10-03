@@ -151,6 +151,7 @@ let
             patch -p1 --batch -u -i ${./patch-jar-tool.txt}
             patch -p1 --batch -u -i ${./patch-coursier-fetch.txt}
             patch -p1 --batch -u -i ${./patch-process.txt}
+            patch -p1 --batch -u -i ${./patch-jdk-sh.txt}
           '';
 
           preBuild = ''
