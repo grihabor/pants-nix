@@ -63,14 +63,15 @@ def main():
     all_command.set_defaults(entrypoint=generate_many_tags)
 
     args = parser.parse_args()
-    args.entrypoint(args)
+    asyncio.run(args.entrypoint(args))
 
 
 async def generate_many_tags(args: Any):
     repo = Repo.default()
-    repo.fetch()
+    await repo.fetch()
 
-    versions = [f"{version}" for version in repo.list_versions() if version.major >= 2 and version.minor >= 19]
+    all_versions = await repo.list_versions()
+    versions = [f"{version}" for version in all_versions if version.major >= 2 and version.minor >= 19]
 
     print("Going to generate these versions:", versions)
     if input("Continue? [y/n] ").lower() not in ("y", "yes"):
@@ -95,25 +96,30 @@ async def _nix_prefetch_git(url: str, rev: str) -> str:
     return await _run(f"nix-prefetch-git {url} --rev {rev} --quiet")
 
 
-async def _prefetch_output_hashes(cargo_lock: str) -> AsyncGenerator[str, None]:
-    for package in tomllib.loads(cargo_lock)["package"]:
-        source = package.get("source", "")
-        m = git_url_re.match(source)
-        if m is None:
-            continue
+async def _prefetch_output_hashes(cargo_lock: str) -> list[tuple[str, str]]:
+    futures = [_prefetch_package_hash(package) for package in tomllib.loads(cargo_lock)["package"]]
+    done, _ = asyncio.wait(futures)
+    return done
 
-        pname = f"{package["name"]}-{package["version"]}"
-        # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the
-        # prefetched hash. To address this we include a hard-coded, known-good
-        # set of hash overrides. If we find pname in output_hash_overrides.json
-        # we use the provided hash instead of prefetching.
-        hash_ = output_hash_overrides.get(pname)
-        if hash_ is None:
-            url, rev1, rev2 = m.group("url", "rev1", "rev2")
-            rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
-            raw = await _nix_prefetch_git(url, rev)
-            hash_ = json.loads(raw).get("hash")
-        yield f'"{pname}" = "{hash_}";'
+
+async def _prefetch_package_hash(package) -> tuple[str, str] | None:
+    source = package.get("source", "")
+    m = git_url_re.match(source)
+    if m is None:
+        return None
+
+    pname = f"{package["name"]}-{package["version"]}"
+    # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the
+    # prefetched hash. To address this we include a hard-coded, known-good
+    # set of hash overrides. If we find pname in output_hash_overrides.json
+    # we use the provided hash instead of prefetching.
+    hash_ = output_hash_overrides.get(pname)
+    if hash_ is None:
+        url, rev1, rev2 = m.group("url", "rev1", "rev2")
+        rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
+        raw = await _nix_prefetch_git(url, rev)
+        hash_ = json.loads(raw).get("hash")
+    return (pname, hash_)
 
 
 async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
@@ -126,10 +132,10 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
 
     tag_dir.mkdir(exist_ok=True)
 
-    cargo_lock = repo.read_file(path="src/rust/engine/Cargo.lock", tag=tag)
+    cargo_lock = await repo.read_file(path="src/rust/engine/Cargo.lock", tag=tag)
     (tag_dir / "Cargo.lock").write_text(cargo_lock)
 
-    rust_toolchain = repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
+    rust_toolchain = await repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
     rust_version = tomllib.loads(rust_toolchain)["toolchain"]["channel"]
 
     template_string = Path("template.nix").read_text("utf-8")
@@ -140,7 +146,9 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
-        output_hashes="\n      ".join(_prefetch_output_hashes(cargo_lock)),
+        output_hashes="\n      ".join(
+            f'"{pname}" = "{hash_}";' for pname, hash_ in (await _prefetch_output_hashes(cargo_lock))
+        ),
     )
     (tag_dir / "default.nix").write_text(result)
 

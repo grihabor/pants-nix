@@ -20,7 +20,10 @@
   in {
     packages.${system} = pants-bin;
     devShells.${system}.default = pkgs.mkShell {
-      packages = [pants-bin."release_2.20.0"];
+      packages = [
+        # pants-bin."release_2.20.0"
+        pkgs.mypy
+      ];
     };
   };
 }
