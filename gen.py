@@ -8,6 +8,7 @@ import argparse
 import asyncio
 import json
 import logging
+import operator
 import os
 import re
 import shlex
@@ -33,14 +34,22 @@ git_url_re = re.compile(r"^git\+(?P<url>https://[^/]+/[^/]+/[^/.?]+(.git)?)(?P<r
 output_hash_overrides = json.loads(Path("output_hash_overrides.json").read_text("utf-8"))
 
 
-async def _run(command: str) -> str:
-    proc = await asyncio.create_subprocess_shell(
-        command,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+semaphore = asyncio.Semaphore(50)
 
-    stdout, stderr = await proc.communicate()
+
+async def _run(command: str) -> str:
+    await semaphore.acquire()
+    logger.info("running: %s", command)
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+    finally:
+        semaphore.release()
 
     if proc.returncode != 0:
         logger.error(f"{command!r} exited with {proc.returncode}, stderr:\n{stderr.decode()}")
@@ -49,7 +58,7 @@ async def _run(command: str) -> str:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
@@ -72,7 +81,7 @@ async def generate_many_tags(args: Any):
     await repo.fetch()
 
     all_versions = await repo.list_versions()
-    versions = [f"{version}" for version in all_versions if version.major >= 2 and version.minor >= 19]
+    versions = [f"{version}" for version in all_versions if version.major >= 2 and version.minor >= 21]
 
     print("Going to generate these versions:", versions)
     if input("Continue? [y/n] ").lower() not in ("y", "yes"):
@@ -139,16 +148,17 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     rust_version = tomllib.loads(rust_toolchain)["toolchain"]["channel"]
 
     template_string = Path("template.nix").read_text("utf-8")
+    output_hashes = await _prefetch_output_hashes(cargo_lock)
+    output_hashes.sort(key=operator.itemgetter(0))
+    print(output_hashes)
     result = string.Template(template_string).safe_substitute(
         version=version,
         args=f"{sys.argv[0]} tag {version}",
-        hash=repo.tag_hash(tag),
+        hash=await repo.tag_hash(tag),
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
-        output_hashes="\n      ".join(
-            f'"{pname}" = "{hash_}";' for pname, hash_ in (await _prefetch_output_hashes(cargo_lock))
-        ),
+        output_hashes="\n      ".join(f'"{pname}" = "{hash_}";' for pname, hash_ in output_hashes),
     )
     (tag_dir / "default.nix").write_text(result)
 
@@ -184,6 +194,7 @@ class Repo:
         if self.path.exists():
             result = await _run(f"git -C {self.path} rev-parse --is-bare-repository")
             if result.strip() == "false":
+                logger.info(f"cloned repo is not bare, removing: {self.path}")
                 shutil.rmtree(self.path)
 
         if not self.path.exists():
@@ -234,6 +245,10 @@ class Version(NamedTuple):
 
     def __format__(self, __format_spec: str) -> str:
         return f"{self.major}.{self.minor}.{self.micro}{self.other}"
+
+    @property
+    def is_stable(self) -> bool:
+        return not self.other
 
 
 if __name__ == "__main__":
