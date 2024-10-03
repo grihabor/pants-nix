@@ -1,18 +1,22 @@
 #!/usr/bin/env nix-shell
 #! nix-shell -i python3.12 --pure
-#! nix-shell -p python312 git nix python312Packages.requests nix-prefetch-git
+#! nix-shell -p python312 git nix python312Packages.requests python312Packages.aiofiles nix-prefetch-git
 
 from __future__ import annotations
 
 import argparse
-import logging
+import asyncio
 import json
+import logging
+import operator
 import os
 import re
 import shlex
+import shutil
 import string
 import subprocess as sp
 import sys
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from functools import total_ordering
 from io import BytesIO
@@ -30,12 +34,31 @@ git_url_re = re.compile(r"^git\+(?P<url>https://[^/]+/[^/]+/[^/.?]+(.git)?)(?P<r
 output_hash_overrides = json.loads(Path("output_hash_overrides.json").read_text("utf-8"))
 
 
-def _run(command: str) -> bytes:
-    return sp.check_output(shlex.split(command))
+semaphore = asyncio.Semaphore(50)
+
+
+async def _run(command: str) -> str:
+    await semaphore.acquire()
+    logger.info("running: %s", command)
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+    finally:
+        semaphore.release()
+
+    if proc.returncode != 0:
+        logger.error(f"{command!r} exited with {proc.returncode}, stderr:\n{stderr.decode()}")
+
+    return stdout.decode()
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
@@ -50,58 +73,65 @@ def main():
     all_command.set_defaults(entrypoint=generate_many_tags)
 
     args = parser.parse_args()
-    args.entrypoint(args)
+    asyncio.run(args.entrypoint(args))
 
 
-def generate_many_tags(args: Any):
+async def generate_many_tags(args: Any):
     repo = Repo.default()
-    repo.fetch()
+    await repo.fetch()
 
-    versions = [f"{version}" for version in repo.list_versions() if version.major >= 2 and version.minor >= 19]
+    all_versions = await repo.list_versions()
+    versions = [f"{version}" for version in all_versions if version.major >= 2 and version.minor >= 21]
 
     print("Going to generate these versions:", versions)
     if input("Continue? [y/n] ").lower() not in ("y", "yes"):
         return
 
-    for version in versions:
-        _generate_tag(repo, version, force=args.force)
+    async with asyncio.TaskGroup() as tg:
+        for version in versions:
+            tg.create_task(_generate_tag(repo, version, force=args.force))
 
     _generate_list_of_packages()
 
 
-def generate_single_tag(args: Any):
+async def generate_single_tag(args: Any) -> None:
     repo = Repo.default()
-    repo.fetch()
+    await repo.fetch()
     version = args.version
-    _generate_tag(repo, version, force=args.force)
+    await _generate_tag(repo, version, force=args.force)
     _generate_list_of_packages()
 
 
-def _nix_prefetch_git(url: str, rev: str) -> str:
-    return _run(f"nix-prefetch-git {url} --rev {rev} --quiet").decode("utf-8")
+async def _nix_prefetch_git(url: str, rev: str) -> str:
+    return await _run(f"nix-prefetch-git {url} --rev {rev} --quiet")
 
 
-def _prefetch_output_hashes(cargo_lock: str) -> Generator[str, None, None]:
-    for package in tomllib.loads(cargo_lock)["package"]:
-        source = package.get("source", "")
-        m = git_url_re.match(source)
-        if m is None:
-            continue
-
-        pname = f"{package["name"]}-{package["version"]}"
-        # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the 
-        # prefetched hash. To address this we include a hard-coded, known-good
-        # set of hash overrides. If we find pname in output_hash_overrides.json
-        # we use the provided hash instead of prefetching.
-        hash_ = output_hash_overrides.get(pname)
-        if hash_ is None:
-            url, rev1, rev2 = m.group("url", "rev1", "rev2")
-            rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
-            hash_ = json.loads(_nix_prefetch_git(url, rev)).get("hash")
-        yield f'"{pname}" = "{hash_}";'
+async def _prefetch_output_hashes(cargo_lock: str) -> list[tuple[str, str]]:
+    futures = [_prefetch_package_hash(package) for package in tomllib.loads(cargo_lock)["package"]]
+    return [result for f in asyncio.as_completed(futures) if (result := await f) is not None]
 
 
-def _generate_tag(repo: Repo, version: str, force: bool = False):
+async def _prefetch_package_hash(package) -> tuple[str, str] | None:
+    source = package.get("source", "")
+    m = git_url_re.match(source)
+    if m is None:
+        return None
+
+    pname = f"{package['name']}-{package['version']}"
+    # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the
+    # prefetched hash. To address this we include a hard-coded, known-good
+    # set of hash overrides. If we find pname in output_hash_overrides.json
+    # we use the provided hash instead of prefetching.
+    hash_ = output_hash_overrides.get(pname)
+    if hash_ is None:
+        url, rev1, rev2 = m.group("url", "rev1", "rev2")
+        rev = rev1[5:] if rev1 else rev2[1:] if rev2 else "HEAD"
+        raw = await _nix_prefetch_git(url, rev)
+        hash_ = json.loads(raw).get("hash")
+    return (pname, hash_)
+
+
+async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     tag = f"release_{version}"
 
     tag_dir = Path("tags") / tag
@@ -111,21 +141,24 @@ def _generate_tag(repo: Repo, version: str, force: bool = False):
 
     tag_dir.mkdir(exist_ok=True)
 
-    cargo_lock = repo.read_file(path="src/rust/engine/Cargo.lock", tag=tag)
+    cargo_lock = await repo.read_file(path="src/rust/engine/Cargo.lock", tag=tag)
     (tag_dir / "Cargo.lock").write_text(cargo_lock)
 
-    rust_toolchain = repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
+    rust_toolchain = await repo.read_file(path="src/rust/engine/rust-toolchain", tag=tag)
     rust_version = tomllib.loads(rust_toolchain)["toolchain"]["channel"]
 
     template_string = Path("template.nix").read_text("utf-8")
+    output_hashes = await _prefetch_output_hashes(cargo_lock)
+    output_hashes.sort(key=operator.itemgetter(0))
+    print(output_hashes)
     result = string.Template(template_string).safe_substitute(
         version=version,
         args=f"{sys.argv[0]} tag {version}",
-        hash=repo.tag_hash(tag),
+        hash=await repo.tag_hash(tag),
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
-        output_hashes="\n      ".join(_prefetch_output_hashes(cargo_lock)),
+        output_hashes="\n      ".join(f'"{pname}" = "{hash_}";' for pname, hash_ in output_hashes),
     )
     (tag_dir / "default.nix").write_text(result)
 
@@ -157,32 +190,36 @@ class Repo:
             path=Path(os.environ["HOME"]) / ".cache" / "pants-nix" / "pants",
         )
 
-    def fetch(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    async def fetch(self) -> None:
+        if self.path.exists():
+            result = await _run(f"git -C {self.path} rev-parse --is-bare-repository")
+            if result.strip() == "false":
+                logger.info(f"cloned repo is not bare, removing: {self.path}")
+                shutil.rmtree(self.path)
+
         if not self.path.exists():
-            _run(f"git clone {self.url} {self.path}")
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            await _run(f"git clone --bare {self.url} {self.path}")
 
-        _run(f"git -C {self.path} fetch origin")
+        await _run(f"git -C {self.path} fetch origin")
 
-    def read_file(self, path: str, tag: str) -> str:
-        _run(f"git -C {self.path} checkout {tag}")
-        return (self.path / path).read_text()
+    async def read_file(self, path: str, tag: str) -> str:
+        return await _run(f"git -C {self.path} show {tag}:{path}")
 
-    def tag_hash(self, tag: str) -> str:
+    async def tag_hash(self, tag: str) -> str:
         with TemporaryDirectory() as d:
             archive = Path(d) / "archive.tar.gz"
-            _run(f"git -C {self.path} archive -o {archive} {tag}")
+            await _run(f"git -C {self.path} archive -o {archive} {tag}")
             path = Path(d) / f"{tag}.tar.gz"
             path.mkdir()
-            _run(f"tar -xf {archive} -C {path}")
-            _run(f"find {path} -maxdepth 1")
-            result = _run(f"nix-hash --type sha256 --base32 --sri {path}")
+            await _run(f"tar -xf {archive} -C {path}")
+            await _run(f"find {path} -maxdepth 1")
+            result = await _run(f"nix-hash --type sha256 --base32 --sri {path}")
 
-        return result.decode(encoding="utf-8").strip()
+        return result.strip()
 
-    def list_versions(self) -> list[Version]:
-        _run(f"git -C {self.path} checkout origin/main")
-        lines = _run(f"git -C {self.path} tag --list release_*").decode("utf-8").splitlines()
+    async def list_versions(self) -> list[Version]:
+        lines = (await _run(f"git -C {self.path} tag --list release_*")).splitlines()
         versions = [Version.from_tag(line.strip()) for line in lines]
         versions.sort()
         return versions
@@ -208,6 +245,10 @@ class Version(NamedTuple):
 
     def __format__(self, __format_spec: str) -> str:
         return f"{self.major}.{self.minor}.{self.micro}{self.other}"
+
+    @property
+    def is_stable(self) -> bool:
+        return not self.other
 
 
 if __name__ == "__main__":
