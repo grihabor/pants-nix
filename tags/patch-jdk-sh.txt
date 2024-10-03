@@ -1,5 +1,5 @@
 diff --git a/src/python/pants/jvm/jdk_rules.py b/src/python/pants/jvm/jdk_rules.py
-index 12d3dbdbd..8ab90f1a9 100644
+index 12d3dbdbd..3d4619b9f 100644
 --- a/src/python/pants/jvm/jdk_rules.py
 +++ b/src/python/pants/jvm/jdk_rules.py
 @@ -14,7 +14,7 @@ from enum import Enum
@@ -19,12 +19,19 @@ index 12d3dbdbd..8ab90f1a9 100644
      request: JdkRequest,
      env_target: EnvironmentTarget,
  ) -> JdkEnvironment:
-@@ -282,7 +283,7 @@ async def prepare_jdk_environment(
+@@ -276,13 +277,14 @@ async def prepare_jdk_environment(
+ 
+     # TODO: Locate `ln`.
+     version_comment = "\n".join(f"# {line}" for line in java_version.splitlines())
++    ln_path = shlex.quote(ln.path)
+     jdk_preparation_script = textwrap.dedent(  # noqa: PNT20
+         f"""\
+         # pants javac script using Coursier {coursier_jdk_option}. `java -version`:"
          {version_comment}
          set -eu
  
 -        /bin/ln -s "$({java_home_command})" "${{PANTS_INTERNAL_ABSOLUTE_PREFIX}}{JdkEnvironment.java_home}"
-+        {ln} -s "$({java_home_command})" "${{PANTS_INTERNAL_ABSOLUTE_PREFIX}}{JdkEnvironment.java_home}"
++        {ln_path} -s "$({java_home_command})" "${{PANTS_INTERNAL_ABSOLUTE_PREFIX}}{JdkEnvironment.java_home}"
          exec "$@"
          """
      )
