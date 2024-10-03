@@ -22,7 +22,8 @@
     devShells.${system}.default = pkgs.mkShell {
       packages = [
         # pants-bin."release_2.20.0"
-        pkgs.mypy
+        pkgs.python3Packages.mypy
+        pkgs.python3Packages.types-requests
       ];
     };
   };

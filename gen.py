@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import shlex
+import shutil
 import string
 import subprocess as sp
 import sys
@@ -86,7 +87,7 @@ async def generate_many_tags(args: Any):
 
 async def generate_single_tag(args: Any) -> None:
     repo = Repo.default()
-    repo.fetch()
+    await repo.fetch()
     version = args.version
     await _generate_tag(repo, version, force=args.force)
     _generate_list_of_packages()
@@ -98,8 +99,7 @@ async def _nix_prefetch_git(url: str, rev: str) -> str:
 
 async def _prefetch_output_hashes(cargo_lock: str) -> list[tuple[str, str]]:
     futures = [_prefetch_package_hash(package) for package in tomllib.loads(cargo_lock)["package"]]
-    done, _ = asyncio.wait(futures)
-    return done
+    return [result for f in asyncio.as_completed(futures) if (result := await f) is not None]
 
 
 async def _prefetch_package_hash(package) -> tuple[str, str] | None:
@@ -108,7 +108,7 @@ async def _prefetch_package_hash(package) -> tuple[str, str] | None:
     if m is None:
         return None
 
-    pname = f"{package["name"]}-{package["version"]}"
+    pname = f"{package['name']}-{package['version']}"
     # I have no idea why, but lmdb-rkv-0.14.0 fails to build with the
     # prefetched hash. To address this we include a hard-coded, known-good
     # set of hash overrides. If we find pname in output_hash_overrides.json
@@ -181,15 +181,19 @@ class Repo:
         )
 
     async def fetch(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self.path.exists():
+            result = await _run(f"git -C {self.path} rev-parse --is-bare-repository")
+            if result.strip() == "false":
+                shutil.rmtree(self.path)
+
         if not self.path.exists():
-            await _run(f"git clone {self.url} {self.path}")
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            await _run(f"git clone --bare {self.url} {self.path}")
 
         await _run(f"git -C {self.path} fetch origin")
 
     async def read_file(self, path: str, tag: str) -> str:
-        await _run(f"git -C {self.path} checkout {tag}")
-        return (self.path / path).read_text()
+        return await _run(f"git -C {self.path} show {tag}:{path}")
 
     async def tag_hash(self, tag: str) -> str:
         with TemporaryDirectory() as d:
@@ -204,7 +208,6 @@ class Repo:
         return result.strip()
 
     async def list_versions(self) -> list[Version]:
-        await _run(f"git -C {self.path} checkout origin/main")
         lines = (await _run(f"git -C {self.path} tag --list release_*")).splitlines()
         versions = [Version.from_tag(line.strip()) for line in lines]
         versions.sort()
