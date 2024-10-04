@@ -1,0 +1,59 @@
+commit 77ef052fe9c3a96a77e26e50fb1b3a19cb857d31
+Author: Borodin Gregory <grihabor@gmail.com>
+Date:   Fri Oct 4 23:12:15 2024 +0200
+
+    Add global option process_extra_env
+
+diff --git a/src/python/pants/engine/intrinsics.py b/src/python/pants/engine/intrinsics.py
+index 5695a3baf..1df702341 100644
+--- a/src/python/pants/engine/intrinsics.py
++++ b/src/python/pants/engine/intrinsics.py
+@@ -3,6 +3,7 @@
+ 
+ from __future__ import annotations
+ 
++import dataclasses
+ import logging
+ 
+ from pants.engine.environment import EnvironmentName
+@@ -40,6 +41,7 @@ from pants.engine.process import (
+ )
+ from pants.engine.rules import _uncacheable_rule, collect_rules, implicitly, rule
+ from pants.util.docutil import git_url
++from pants.option.global_options import GlobalOptions
+ 
+ 
+ @rule
+@@ -102,8 +104,11 @@ async def add_prefix(add_prefix: AddPrefix) -> Digest:
+ 
+ @rule
+ async def execute_process(
+-    process: Process, process_execution_environment: ProcessExecutionEnvironment
++    process: Process,
++    process_execution_environment: ProcessExecutionEnvironment,
++    options: GlobalOptions,
+ ) -> FallibleProcessResult:
++    process = dataclasses.replace(process, env={**process.env, **options.process_extra_env})
+     return await native_engine.execute_process(process, process_execution_environment)
+ 
+ 
+diff --git a/src/python/pants/option/global_options.py b/src/python/pants/option/global_options.py
+index 6ae7843a9..3e397534b 100644
+--- a/src/python/pants/option/global_options.py
++++ b/src/python/pants/option/global_options.py
+@@ -1998,6 +1998,15 @@ class GlobalOptions(BootstrapOptions, Subsystem):
+         default=[],
+     )
+ 
++    process_extra_env = DictOption[str](
++        advanced=True,
++        help=softwrap(
++            """
++            Extra environment variables for every Process call.
++            """
++        )
++    )
++
+     @classmethod
+     def validate_instance(cls, opts):
+         """Validates an instance of global options for cases that are not prohibited via
