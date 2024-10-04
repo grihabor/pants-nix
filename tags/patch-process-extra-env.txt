@@ -1,25 +1,13 @@
 diff --git a/src/python/pants/engine/intrinsics.py b/src/python/pants/engine/intrinsics.py
-index 5695a3baf..1df702341 100644
+index 5695a3baf..2d14b9314 100644
 --- a/src/python/pants/engine/intrinsics.py
 +++ b/src/python/pants/engine/intrinsics.py
-@@ -3,6 +3,7 @@
+@@ -100,10 +100,15 @@ async def add_prefix(add_prefix: AddPrefix) -> Digest:
+     return await native_engine.add_prefix(add_prefix)
  
- from __future__ import annotations
  
 +import dataclasses
- import logging
- 
- from pants.engine.environment import EnvironmentName
-@@ -40,6 +41,7 @@ from pants.engine.process import (
- )
- from pants.engine.rules import _uncacheable_rule, collect_rules, implicitly, rule
- from pants.util.docutil import git_url
 +from pants.option.global_options import GlobalOptions
- 
- 
- @rule
-@@ -102,8 +104,11 @@ async def add_prefix(add_prefix: AddPrefix) -> Digest:
- 
  @rule
  async def execute_process(
 -    process: Process, process_execution_environment: ProcessExecutionEnvironment
