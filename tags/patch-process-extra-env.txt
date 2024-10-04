@@ -1,9 +1,3 @@
-commit 77ef052fe9c3a96a77e26e50fb1b3a19cb857d31
-Author: Borodin Gregory <grihabor@gmail.com>
-Date:   Fri Oct 4 23:12:15 2024 +0200
-
-    Add global option process_extra_env
-
 diff --git a/src/python/pants/engine/intrinsics.py b/src/python/pants/engine/intrinsics.py
 index 5695a3baf..1df702341 100644
 --- a/src/python/pants/engine/intrinsics.py
