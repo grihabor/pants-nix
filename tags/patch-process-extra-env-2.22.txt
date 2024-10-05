@@ -7,7 +7,7 @@ index b99e1a682a..1114d86de4 100644
  
  
 +import dataclasses
-+from python.pants.option.global_options import GlobalOptions
++from pants.option.global_options import GlobalOptions
  @rule
  async def process_request_to_process_result(
 -    process: Process, process_execution_environment: ProcessExecutionEnvironment
