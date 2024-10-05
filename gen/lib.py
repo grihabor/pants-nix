@@ -78,7 +78,7 @@ async def generate_many_tags(args: Any):
     await repo.fetch()
 
     all_versions = await repo.list_versions()
-    versions = [f"{version}" for version in all_versions if version > args.start]
+    versions = [f"{version}" for version in all_versions if version >= args.start]
 
     print("Going to generate these versions:", versions)
     if input("Continue? [y/n] ").lower() not in ("y", "yes"):
@@ -253,6 +253,7 @@ class Version:
         match = cls.regex.match(tag)
         if not match:
             raise ValueError(f"Tag `{tag}` doesn't match the regex `{cls.regex}")
+        print(tag)
         return Version(
             major=int(match.group("major")),
             minor=int(match.group("minor")),
@@ -267,11 +268,11 @@ class Version:
 
     def __format__(self, __format_spec: str) -> str:
         extra = ""
-        if self.rc:
+        if self.rc is not None:
             extra = f"rc{self.rc}"
-        if self.a:
+        if self.a is not None:
             extra = f"a{self.a}"
-        if self.dev:
+        if self.dev is not None:
             extra = f".dev{self.dev}"
         return f"{self.major}.{self.minor}.{self.micro}{extra}"
 
