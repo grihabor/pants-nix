@@ -222,14 +222,27 @@ class Repo:
         return versions
 
 
-@dataclass(frozen=True, order=True)
+def maybe_int(s: str | None) -> int | None:
+    if s is None:
+        return None
+    return int(s)
+
+
+INT32_MAX = 2**64 - 1
+
+
+@dataclass(frozen=True)
 class Version:
     major: int
     minor: int
     micro: int
-    other: str
+    rc: int | None = None
+    a: int | None = None
+    dev: int | None = None
 
-    regex: ClassVar[re.Pattern[str]] = re.compile(r"^release_([0-9]+).([0-9]+).([0-9]+)(.*)$")
+    regex: ClassVar[re.Pattern[str]] = re.compile(
+        r"^release_(?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<micro>[0-9]+)(rc(?P<rc>[0-9]+)|\.dev(?P<dev>[0-9]+)|a(?P<a>[0-9]+))?$"
+    )
 
     @classmethod
     def from_tag(cls, tag: str) -> Version:
@@ -237,10 +250,12 @@ class Version:
         if not match:
             raise ValueError(f"Tag `{tag}` doesn't match the regex `{cls.regex}")
         return Version(
-            major=int(match.group(1)),
-            minor=int(match.group(2)),
-            micro=int(match.group(3)),
-            other=str(match.group(4)),
+            major=int(match.group("major")),
+            minor=int(match.group("minor")),
+            micro=int(match.group("micro")),
+            rc=maybe_int(match.group("rc")),
+            a=maybe_int(match.group("a")),
+            dev=maybe_int(match.group("dev")),
         )
 
     def __format__(self, __format_spec: str) -> str:
@@ -249,3 +264,30 @@ class Version:
     @property
     def is_stable(self) -> bool:
         return not self.other
+
+    def _tuple(self) -> tuple[int, int, int, int, int, int]:
+        main = (
+            self.major,
+            self.minor,
+            self.micro,
+        )
+        extra = (
+            self.rc if self.rc is not None else -1,
+            self.a if self.a is not None else -1,
+            self.dev if self.dev is not None else -1,
+        )
+        if extra == (-1, -1, -1):
+            extra = (INT32_MAX, INT32_MAX, INT32_MAX)
+        return main + extra
+
+    def __lt__(self, other: Version) -> bool:
+        return self._tuple() < other._tuple()
+
+    def __le__(self, other: Version) -> bool:
+        return self._tuple() <= other._tuple()
+
+    def __gt__(self, other: Version) -> bool:
+        return self._tuple() > other._tuple()
+
+    def __ge__(self, other: Version) -> bool:
+        return self._tuple() >= other._tuple()
