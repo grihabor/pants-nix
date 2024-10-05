@@ -1,0 +1,46 @@
+diff --git a/src/python/pants/engine/intrinsics.py b/src/python/pants/engine/intrinsics.py
+index b99e1a682a..1114d86de4 100644
+--- a/src/python/pants/engine/intrinsics.py
++++ b/src/python/pants/engine/intrinsics.py
+@@ -97,15 +97,19 @@ async def add_prefix_request_to_digest(add_prefix: AddPrefix) -> Digest:
+     return await native_engine.add_prefix_request_to_digest(add_prefix)
+ 
+ 
++import dataclasses
++from pants.option.global_options import GlobalOptions
+ @rule
+ async def process_request_to_process_result(
+-    process: Process, process_execution_environment: ProcessExecutionEnvironment
++    process: Process,
++    process_execution_environment: ProcessExecutionEnvironment,
++    options: GlobalOptions,
+ ) -> FallibleProcessResult:
++    process = dataclasses.replace(process, env={**process.env, **options.process_extra_env})
+     return await native_engine.process_request_to_process_result(
+         process, process_execution_environment
+     )
+ 
+-
+ @rule
+ async def digest_subset_to_digest(digest_subset: DigestSubset) -> Digest:
+     return await native_engine.digest_subset_to_digest(digest_subset)
+diff --git a/src/python/pants/option/global_options.py b/src/python/pants/option/global_options.py
+index 364d4366a0..a1e279e2e6 100644
+--- a/src/python/pants/option/global_options.py
++++ b/src/python/pants/option/global_options.py
+@@ -1964,6 +1964,15 @@ class GlobalOptions(BootstrapOptions, Subsystem):
+         default=[],
+     )
+ 
++    process_extra_env = DictOption[str](
++        advanced=True,
++        help=softwrap(
++            """
++            Extra environment variables for every Process call.
++            """
++        )
++    )
++
+     @classmethod
+     def validate_instance(cls, opts):
+         """Validates an instance of global options for cases that are not prohibited via
