@@ -217,7 +217,11 @@ class Repo:
 
     async def list_versions(self) -> list[Version]:
         lines = (await _run(f"git -C {self.path} tag --list release_*")).splitlines()
-        versions = [Version.from_tag(line.strip()) for line in lines]
+        versions = [
+            Version.from_tag(stripped)
+            for line in lines
+            if not (stripped := line.strip()).startswith("release_1.") and not stripped.startswith("release_2.0.")
+        ]
         versions.sort()
         return versions
 
@@ -258,8 +262,18 @@ class Version:
             dev=maybe_int(match.group("dev")),
         )
 
+    def __str__(self) -> str:
+        return f"{self}"
+
     def __format__(self, __format_spec: str) -> str:
-        return f"{self.major}.{self.minor}.{self.micro}{self.other}"
+        extra = ""
+        if self.rc:
+            extra = f"rc{self.rc}"
+        if self.a:
+            extra = f"a{self.a}"
+        if self.dev:
+            extra = f".dev{self.dev}"
+        return f"{self.major}.{self.minor}.{self.micro}{extra}"
 
     @property
     def is_stable(self) -> bool:
