@@ -152,7 +152,7 @@ let
             patch -p1 --batch -u -i ${./patch-coursier-fetch.txt}
             patch -p1 --batch -u -i ${./patch-process.txt}
             patch -p1 --batch -u -i ${./patch-jdk-sh.txt}
-            patch -p1 --batch -u -i ${./patch-process-extra-env.txt}
+            patch -p1 --batch -u -i ${./patch-process-extra-env-2.22.txt}
           '';
 
           preBuild = ''
