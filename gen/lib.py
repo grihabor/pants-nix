@@ -276,8 +276,12 @@ class Version:
         return f"{self.major}.{self.minor}.{self.micro}{extra}"
 
     @property
+    def _extra(self) -> tuple[int | None, int | None, int | None]:
+        return (self.rc, self.a, self.dev)
+
+    @property
     def is_stable(self) -> bool:
-        return not self.other
+        return self._extra == (None, None, None)
 
     def _tuple(self) -> tuple[int, int, int, int, int, int]:
         main = (
@@ -285,13 +289,14 @@ class Version:
             self.minor,
             self.micro,
         )
-        extra = (
-            self.rc if self.rc is not None else -1,
-            self.a if self.a is not None else -1,
-            self.dev if self.dev is not None else -1,
-        )
-        if extra == (-1, -1, -1):
+        if self.is_stable:
             extra = (INT32_MAX, INT32_MAX, INT32_MAX)
+        else:
+            extra = (
+                self.rc if self.rc is not None else -1,
+                self.a if self.a is not None else -1,
+                self.dev if self.dev is not None else -1,
+            )
         return main + extra
 
     def __lt__(self, other: Version) -> bool:
