@@ -147,10 +147,9 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     template_string = Path("template.nix").read_text("utf-8")
     output_hashes = await _prefetch_output_hashes(cargo_lock)
     output_hashes.sort(key=operator.itemgetter(0))
-    print(output_hashes)
     result = string.Template(template_string).safe_substitute(
         version=version,
-        args=f"{sys.argv[0]} tag {version}",
+        args=f"python -m gen tag {version}",
         hash=await repo.tag_hash(tag),
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
@@ -253,7 +252,6 @@ class Version:
         match = cls.regex.match(tag)
         if not match:
             raise ValueError(f"Tag `{tag}` doesn't match the regex `{cls.regex}")
-        print(tag)
         return Version(
             major=int(match.group("major")),
             minor=int(match.group("minor")),
