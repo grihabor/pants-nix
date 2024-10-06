@@ -4,8 +4,10 @@ let
     hash,
     rustVersion,
     cargoLock,
+    patches,
   }: (
     {
+      lib,
       fetchFromGitHub,
       python3,
       stdenv,
@@ -146,14 +148,10 @@ let
             find src/python -type d -exec bash -c "if [ -n \"$ls {}/*.py\" ]; then touch {}/__init__.py; fi" \;
           '';
 
-          prePatch = ''
-            patch -p1 --batch -u -i ${./patch-process-manager.txt}
-            patch -p1 --batch -u -i ${./patch-jar-tool.txt}
-            patch -p1 --batch -u -i ${./patch-coursier-fetch.txt}
-            patch -p1 --batch -u -i ${./patch-process.txt}
-            patch -p1 --batch -u -i ${./patch-jdk-sh.txt}
-            patch -p1 --batch -u -i ${./patch-process-extra-env-2.22.txt}
-          '';
+          prePatch =
+            lib.strings.concatMapStrings
+            (patch_path: "patch -p1 --batch -u -i ${./patch-process-manager.txt}")
+            patches;
 
           preBuild = ''
 

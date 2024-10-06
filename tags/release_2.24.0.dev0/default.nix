@@ -23,7 +23,15 @@ let
       "tree-sitter-dockerfile-0.2.0" = "sha256-UQSdcOWRH1QsFWVgxyx9/E7419Ue5zi79ngWNsWuQBc=";
     };
   };
+  patches = [
+    ./patch-process-manager.txt
+    ./patch-jar-tool.txt
+    ./patch-coursier-fetch.txt
+    ./patch-process.txt
+    ./patch-jdk-sh.txt
+    ./patch-process-extra-env.txt
+  ];
 in
   lib.makePants {
-    inherit version hash rustVersion cargoLock;
+    inherit version hash rustVersion cargoLock patches;
   }
