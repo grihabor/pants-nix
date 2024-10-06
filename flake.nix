@@ -21,8 +21,12 @@
     packages.${system} = pants-bin;
     devShells.${system}.default = pkgs.mkShell {
       packages = [
-        # pants-bin."release_2.20.0"
+        pkgs.nix-prefetch-git
+        pkgs.python3
+        pkgs.python3Packages.aiofiles
         pkgs.python3Packages.mypy
+        pkgs.python3Packages.pytest
+        pkgs.python3Packages.requests
         pkgs.python3Packages.types-requests
       ];
     };

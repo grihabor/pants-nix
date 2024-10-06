@@ -1,7 +1,3 @@
-#!/usr/bin/env nix-shell
-#! nix-shell -i python3.12 --pure
-#! nix-shell -p python312 git nix python312Packages.requests python312Packages.aiofiles nix-prefetch-git
-
 from __future__ import annotations
 
 import argparse
@@ -22,7 +18,7 @@ from functools import total_ordering
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Generator, NamedTuple
+from typing import Any, ClassVar, Generator, NamedTuple
 
 import requests
 import tomllib
@@ -70,6 +66,7 @@ def main():
 
     all_command = subparsers.add_parser("all")
     all_command.add_argument("--force", action=argparse.BooleanOptionalAction)
+    all_command.add_argument("--start", type=Version.from_tag, required=True)
     all_command.set_defaults(entrypoint=generate_many_tags)
 
     args = parser.parse_args()
@@ -81,7 +78,7 @@ async def generate_many_tags(args: Any):
     await repo.fetch()
 
     all_versions = await repo.list_versions()
-    versions = [f"{version}" for version in all_versions if version.major >= 2 and version.minor >= 21]
+    versions = [f"{version}" for version in all_versions if version >= args.start]
 
     print("Going to generate these versions:", versions)
     if input("Continue? [y/n] ").lower() not in ("y", "yes"):
@@ -150,10 +147,9 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     template_string = Path("template.nix").read_text("utf-8")
     output_hashes = await _prefetch_output_hashes(cargo_lock)
     output_hashes.sort(key=operator.itemgetter(0))
-    print(output_hashes)
     result = string.Template(template_string).safe_substitute(
         version=version,
-        args=f"{sys.argv[0]} tag {version}",
+        args=f"python -m gen tag {version}",
         hash=await repo.tag_hash(tag),
         rust_version=rust_version,
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
@@ -220,36 +216,96 @@ class Repo:
 
     async def list_versions(self) -> list[Version]:
         lines = (await _run(f"git -C {self.path} tag --list release_*")).splitlines()
-        versions = [Version.from_tag(line.strip()) for line in lines]
+        versions = [
+            Version.from_tag(stripped)
+            for line in lines
+            if not (stripped := line.strip()).startswith("release_1.") and not stripped.startswith("release_2.0.")
+        ]
         versions.sort()
         return versions
 
 
-class Version(NamedTuple):
+def maybe_int(s: str | None) -> int | None:
+    if s is None:
+        return None
+    return int(s)
+
+
+INT32_MAX = 2**64 - 1
+
+
+@dataclass(frozen=True)
+class Version:
     major: int
     minor: int
     micro: int
-    other: str
+    rc: int | None = None
+    a: int | None = None
+    dev: int | None = None
+
+    regex: ClassVar[re.Pattern[str]] = re.compile(
+        r"^release_(?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<micro>[0-9]+)(rc(?P<rc>[0-9]+)|\.dev(?P<dev>[0-9]+)|a(?P<a>[0-9]+))?$"
+    )
 
     @classmethod
     def from_tag(cls, tag: str) -> Version:
-        regex = r"^release_([0-9]+).([0-9]+).([0-9]+)(.*)$"
-        match = re.match(regex, tag)
-        assert match, tag
+        match = cls.regex.match(tag)
+        if not match:
+            raise ValueError(f"Tag `{tag}` doesn't match the regex `{cls.regex}")
         return Version(
-            major=int(match.group(1)),
-            minor=int(match.group(2)),
-            micro=int(match.group(3)),
-            other=str(match.group(4)),
+            major=int(match.group("major")),
+            minor=int(match.group("minor")),
+            micro=int(match.group("micro")),
+            rc=maybe_int(match.group("rc")),
+            a=maybe_int(match.group("a")),
+            dev=maybe_int(match.group("dev")),
         )
 
+    def __str__(self) -> str:
+        return f"{self}"
+
     def __format__(self, __format_spec: str) -> str:
-        return f"{self.major}.{self.minor}.{self.micro}{self.other}"
+        extra = ""
+        if self.rc is not None:
+            extra = f"rc{self.rc}"
+        if self.a is not None:
+            extra = f"a{self.a}"
+        if self.dev is not None:
+            extra = f".dev{self.dev}"
+        return f"{self.major}.{self.minor}.{self.micro}{extra}"
+
+    @property
+    def _extra(self) -> tuple[int | None, int | None, int | None]:
+        return (self.rc, self.a, self.dev)
 
     @property
     def is_stable(self) -> bool:
-        return not self.other
+        return self._extra == (None, None, None)
 
+    def _tuple(self) -> tuple[int, int, int, int, int, int]:
+        main = (
+            self.major,
+            self.minor,
+            self.micro,
+        )
+        if self.is_stable:
+            extra = (INT32_MAX, INT32_MAX, INT32_MAX)
+        else:
+            extra = (
+                self.rc if self.rc is not None else -1,
+                self.a if self.a is not None else -1,
+                self.dev if self.dev is not None else -1,
+            )
+        return main + extra
 
-if __name__ == "__main__":
-    main()
+    def __lt__(self, other: Version) -> bool:
+        return self._tuple() < other._tuple()
+
+    def __le__(self, other: Version) -> bool:
+        return self._tuple() <= other._tuple()
+
+    def __gt__(self, other: Version) -> bool:
+        return self._tuple() > other._tuple()
+
+    def __ge__(self, other: Version) -> bool:
+        return self._tuple() >= other._tuple()
