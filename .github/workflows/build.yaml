@@ -13,7 +13,7 @@ jobs:
           name: pants-nix
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - run: nix build '.#"release_2.21.0"'
-      - run: touch pants.toml && nix shell '.#"release_2.21.0"' --command pants --version
+      - run: touch pants.toml && nix shell '.#"release_2.21.0"' --command pants --no-pantsd --version
   build-2-22:
     runs-on: ubuntu-latest
     steps:
@@ -26,4 +26,4 @@ jobs:
           name: pants-nix
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - run: nix build '.#"release_2.22.0"'
-      - run: touch pants.toml && nix shell '.#"release_2.22.0"' --command pants --version
+      - run: touch pants.toml && nix shell '.#"release_2.22.0"' --command pants --no-pantsd --version
