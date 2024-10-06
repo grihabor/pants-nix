@@ -22,7 +22,14 @@ let
       "prodash-16.0.0" = "sha256-Dkn4BmsF1SnSDAoqW5QkjdzGHEq41y7S20Q/DkRCpVQ=";
     };
   };
+  patches = [
+    ./patch-process-manager.txt
+    ./patch-jar-tool.txt
+    ./patch-coursier-fetch.txt
+    ./patch-process.txt
+    ./patch-jdk-sh.txt
+  ];
 in
   lib.makePants {
-    inherit version hash rustVersion cargoLock;
+    inherit version hash rustVersion cargoLock patches;
   }

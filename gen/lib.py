@@ -130,6 +130,7 @@ async def _prefetch_package_hash(package) -> tuple[str, str] | None:
 
 async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     tag = f"release_{version}"
+    version_ = Version.from_tag(tag)
 
     tag_dir = Path("tags") / tag
     if not force and tag_dir.exists():
@@ -155,6 +156,19 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
         output_hashes="\n      ".join(f'"{pname}" = "{hash_}";' for pname, hash_ in output_hashes),
+        patches="\n    ".join(
+            [
+                *[
+                    "./patch-process-manager.txt",
+                    "./patch-jar-tool.txt",
+                    "./patch-coursier-fetch.txt",
+                    "./patch-process.txt",
+                    "./patch-jdk-sh.txt",
+                ],
+                *(["./patch-process-extra-env-2.22.txt"] if Version(2, 22, 0) <= version_ < Version(2, 23, 0) else []),
+                *(["./patch-process-extra-env.txt"] if Version(2, 23, 0) <= version_ else []),
+            ]
+        ),
     )
     (tag_dir / "default.nix").write_text(result)
 

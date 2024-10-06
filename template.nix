@@ -15,7 +15,10 @@ let
       $output_hashes
     };
   };
+  patches = [
+    $patches
+  ];
 in
   lib.makePants {
-    inherit version hash rustVersion cargoLock;
+    inherit version hash rustVersion cargoLock patches;
   }
