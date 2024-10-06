@@ -23,12 +23,12 @@ let
     };
   };
   patches = [
-    ./patch-process-manager.txt
-    ./patch-jar-tool.txt
-    ./patch-coursier-fetch.txt
-    ./patch-process.txt
-    ./patch-jdk-sh.txt
-    ./patch-process-extra-env-2.22.txt
+    ../../common/patch-process-manager.txt
+    ../../common/patch-jar-tool.txt
+    ../../common/patch-coursier-fetch.txt
+    ../../common/patch-process.txt
+    ../../common/patch-jdk-sh.txt
+    ../../common/patch-process-extra-env-2.22.txt
   ];
 in
   lib.makePants {

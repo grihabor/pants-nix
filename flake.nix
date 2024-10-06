@@ -1,4 +1,12 @@
 {
+  nixConfig = {
+    extra-substituters = [
+      "https://pants-nix.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "pants-nix.cachix.org-1:qbtCBNLKjk4XIuZPquG8oQuEILiIFsd/pI9nkJ4W2OQ="
+    ];
+  };
   description = "A very basic flake";
 
   inputs = {
