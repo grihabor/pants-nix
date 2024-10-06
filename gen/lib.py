@@ -148,6 +148,17 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
     template_string = Path("template.nix").read_text("utf-8")
     output_hashes = await _prefetch_output_hashes(cargo_lock)
     output_hashes.sort(key=operator.itemgetter(0))
+    patches_filenames = [
+        *[
+            "patch-process-manager.txt",
+            "patch-jar-tool.txt",
+            "patch-coursier-fetch.txt",
+            "patch-process.txt",
+            "patch-jdk-sh.txt",
+        ],
+        *(["patch-process-extra-env-2.22.txt"] if Version(2, 22, 0) <= version_ < Version(2, 23, 0) else []),
+        *(["patch-process-extra-env.txt"] if Version(2, 23, 0) <= version_ else []),
+    ]
     result = string.Template(template_string).safe_substitute(
         version=version,
         args=f"python -m gen tag {version}",
@@ -156,19 +167,7 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
         cargo_lock_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/Cargo.lock",
         rust_toolchain_url=f"https://raw.githubusercontent.com/pantsbuild/pants/{tag}/src/rust/engine/rust-toolchain",
         output_hashes="\n      ".join(f'"{pname}" = "{hash_}";' for pname, hash_ in output_hashes),
-        patches="\n    ".join(
-            [
-                *[
-                    "./patch-process-manager.txt",
-                    "./patch-jar-tool.txt",
-                    "./patch-coursier-fetch.txt",
-                    "./patch-process.txt",
-                    "./patch-jdk-sh.txt",
-                ],
-                *(["./patch-process-extra-env-2.22.txt"] if Version(2, 22, 0) <= version_ < Version(2, 23, 0) else []),
-                *(["./patch-process-extra-env.txt"] if Version(2, 23, 0) <= version_ else []),
-            ]
-        ),
+        patches="\n    ".join(f"../../common/{filename}" for filename in patches_filenames),
     )
     (tag_dir / "default.nix").write_text(result)
 
