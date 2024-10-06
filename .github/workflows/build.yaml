@@ -11,7 +11,7 @@ jobs:
         nix_path: nixpkgs=channel:nixos-unstable
     - uses: cachix/cachix-action@v14
       with:
-        name: pants-nix-cache
+        name: pants-nix
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - run: nix build '.#"release_2.22.0"'
     - run: nix shell '.#"release_2.22.0"' --command pants --version
