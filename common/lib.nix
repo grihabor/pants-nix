@@ -150,7 +150,7 @@ let
 
           prePatch =
             lib.strings.concatMapStrings
-            (patch_path: "patch -p1 --batch -u -i ${patch_path}")
+            (patch_path: "patch -p1 --batch -u -i ${patch_path}\n")
             patches;
 
           preBuild = ''
