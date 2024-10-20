@@ -153,7 +153,6 @@ async def _generate_tag(repo: Repo, version: str, force: bool = False) -> None:
             "patch-process-manager.txt",
             "patch-jar-tool.txt",
             "patch-coursier-fetch.txt",
-            "patch-process.txt",
             "patch-jdk-sh.txt",
         ],
         *(["patch-process-extra-env-2.22.txt"] if Version(2, 22, 0) <= version_ < Version(2, 23, 0) else []),
