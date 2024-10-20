@@ -28,7 +28,6 @@ let
     ../../common/patch-process-manager.txt
     ../../common/patch-jar-tool.txt
     ../../common/patch-coursier-fetch.txt
-    ../../common/patch-process.txt
     ../../common/patch-jdk-sh.txt
   ];
 in
